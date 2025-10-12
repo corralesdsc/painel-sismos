@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Painel de Sismos - Real Time</title>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; background:#f0f2f5; text-align:center; }
+  h1 { margin-top:20px; }
+  canvas { background:#fff; border:1px solid #ccc; margin-top:20px; }
+</style>
+</head>
+<body>
+
+<h1>Painel de Sismos - ESP32</h1>
+<canvas id="sismoChart" width="800" height="400"></canvas>
+
+<script>
+  // ================== CONFIGURAÇÃO ==================
+  const brokerUrl = 'wss://5f34fc251ae441fcbdb7b8e3fc2d7a45.s1.eu.hivemq.cloud:8884/mqtt';
+  const username = 'esp32_sismo';
+  const password = 'Sismo@2025!';
+  const topic = 'sismo/leitura';
+  const maxPoints = 50; // número de pontos no gráfico
+  // ==================================================
+
+  // Cria gráfico
+  const ctx = document.getElementById('sismoChart').getContext('2d');
+  const chartData = {
+    labels: Array(maxPoints).fill(''),
+    datasets: [{
+      label: 'Leitura do Sensor',
+      data: Array(maxPoints).fill(0),
+      borderColor: 'rgba(255,99,132,1)',
+      backgroundColor: 'rgba(255,99,132,0.2)',
+      fill: true,
+      tension: 0.3
+    }]
+  };
+  const sismoChart = new Chart(ctx, {
+    type: 'line',
+    data: chartData,
+    options: {
+      animation: false,
+      responsive: true,
+      scales: {
+        x: { display: false },
+        y: { beginAtZero: true }
+      }
+    }
+  });
+
+  // Conecta ao MQTT via WebSocket
+  const client = mqtt.connect(brokerUrl, {
+    username: username,
+    password: password,
+    reconnectPeriod: 1000
+  });
+
+  client.on('connect', () => {
+    console.log('Conectado ao HiveMQ Cloud!');
+    client.subscribe(topic, { qos: 0 }, (err) => {
+      if (err) console.error('Erro ao subscrever:', err);
+    });
+  });
+
+  client.on('message', (t, message) => {
+    if (t === topic) {
+      const value = parseInt(message.toString());
+      // Adiciona valor ao gráfico
+      chartData.datasets[0].data.push(value);
+      chartData.datasets[0].data.shift(); // remove o primeiro
+      sismoChart.update();
+    }
+  });
+
+  client.on('error', (err) => console.error('MQTT Error:', err));
+  client.on('reconnect', () => console.log('Reconectando...'));
+</script>
+
+</body>
+</html>
