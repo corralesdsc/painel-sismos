@@ -2,81 +2,238 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Painel de Sismos - Real Time</title>
+<title>Detector de Sismos - ESP32</title>
+
+<!-- MQTT.js -->
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Leaflet.js -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<!-- Fonte moderna -->
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+
 <style>
-  body { font-family: Arial, sans-serif; background:#f0f2f5; text-align:center; }
-  h1 { margin-top:20px; }
-  canvas { background:#fff; border:1px solid #ccc; margin-top:20px; }
+:root {
+  --azul-claro: #3DC2F2;
+  --azul-medio: #1197E0;
+  --azul-escuro: #015D9A;
+  --roxo-azulado: #8CA2C4;
+  --ciano-claro: #66D9F7;
+  --alerta-normal: #ffffff;
+  --alerta-fraco: #ffeb3b;
+  --alerta-forte: #f44336;
+}
+
+body {
+  font-family: 'Montserrat', sans-serif;
+  background: linear-gradient(to bottom, var(--roxo-azulado), var(--azul-claro), var(--azul-medio), var(--azul-escuro));
+  color: #fff;
+  margin: 0;
+  padding: 0;
+}
+
+header {
+  padding: 20px;
+  text-align: center;
+  font-size: 2em;
+  font-weight: bold;
+}
+
+.container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 10px;
+}
+
+.card {
+  background-color: rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 20px;
+  margin: 10px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  min-width: 200px;
+  text-align: center;
+}
+
+#sismoChart {
+  background-color: rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 10px;
+  margin: 20px auto;
+  max-width: 90%;
+}
+
+#map {
+  border-radius: 10px;
+  margin: 20px auto;
+  max-width: 90%;
+  height: 400px;
+}
+
+button {
+  background-color: var(--ciano-claro);
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  margin: 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+button:hover {
+  background-color: var(--azul-medio);
+}
 </style>
 </head>
 <body>
 
-<h1>Painel de Sismos - ESP32</h1>
+<header>Detector de Sismos - ESP32</header>
+
+<div class="container">
+  <div class="card">
+    <h3>Última Leitura</h3>
+    <p id="lastValue">0 ⚪ Normal</p>
+  </div>
+  <div class="card">
+    <h3>Mensagens Recebidas</h3>
+    <p id="msgCount">0</p>
+  </div>
+  <div class="card">
+    <h3>Status MQTT</h3>
+    <p id="mqttStatus">Offline</p>
+  </div>
+  <div class="card">
+    <button id="resetBtn">Reset Gráfico</button>
+  </div>
+</div>
+
 <canvas id="sismoChart" width="800" height="400"></canvas>
+<div id="map"></div>
 
 <script>
-  // ================== CONFIGURAÇÃO ==================
-  const brokerUrl = 'wss://5f34fc251ae441fcbdb7b8e3fc2d7a45.s1.eu.hivemq.cloud:8884/mqtt';
-  const username = 'esp32_sismo';
-  const password = 'Sismo@2025!';
-  const topic = 'sismo/leitura';
-  const maxPoints = 50; // número de pontos no gráfico
-  // ==================================================
+/* =================== CONFIGURAÇÃO =================== */
+const brokerUrl = 'wss://5f34fc251ae441fcbdb7b8e3fc2d7a45.s1.eu.hivemq.cloud:8884/mqtt';
+const username = 'esp32_sismo';
+const password = 'Sismo@2025!';
+const topic = 'sismo/leitura';
+const maxPoints = 50; // pontos no gráfico
 
-  // Cria gráfico
-  const ctx = document.getElementById('sismoChart').getContext('2d');
-  const chartData = {
-    labels: Array(maxPoints).fill(''),
-    datasets: [{
-      label: 'Leitura do Sensor',
-      data: Array(maxPoints).fill(0),
-      borderColor: 'rgba(255,99,132,1)',
-      backgroundColor: 'rgba(255,99,132,0.2)',
-      fill: true,
-      tension: 0.3
-    }]
-  };
-  const sismoChart = new Chart(ctx, {
-    type: 'line',
-    data: chartData,
-    options: {
-      animation: false,
-      responsive: true,
-      scales: {
-        x: { display: false },
-        y: { beginAtZero: true }
-      }
+// Localização fixa do sensor
+const sensorLat = -23.55052;
+const sensorLon = -46.633308;
+
+/* =================== GRÁFICO =================== */
+const ctx = document.getElementById('sismoChart').getContext('2d');
+const chartData = {
+  labels: Array(maxPoints).fill(''),
+  datasets: [{
+    label: 'Leitura do Sensor',
+    data: Array(maxPoints).fill(0),
+    borderColor: 'rgba(255,255,255,1)',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    fill: true,
+    tension: 0.3
+  }]
+};
+const sismoChart = new Chart(ctx, {
+  type: 'line',
+  data: chartData,
+  options: {
+    animation: false,
+    responsive: true,
+    scales: {
+      x: { display: false },
+      y: { beginAtZero: true }
     }
-  });
+  }
+});
 
-  // Conecta ao MQTT via WebSocket
-  const client = mqtt.connect(brokerUrl, {
-    username: username,
-    password: password,
-    reconnectPeriod: 1000
-  });
+/* =================== MAPA =================== */
+const map = L.map('map').setView([sensorLat, sensorLon], 10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
 
-  client.on('connect', () => {
-    console.log('Conectado ao HiveMQ Cloud!');
-    client.subscribe(topic, { qos: 0 }, (err) => {
-      if (err) console.error('Erro ao subscrever:', err);
-    });
-  });
+let marker = L.marker([sensorLat, sensorLon]).addTo(map)
+  .bindPopup('Sensor ativo: 0')
+  .openPopup();
 
-  client.on('message', (t, message) => {
-    if (t === topic) {
-      const value = parseInt(message.toString());
-      // Adiciona valor ao gráfico
-      chartData.datasets[0].data.push(value);
-      chartData.datasets[0].data.shift(); // remove o primeiro
-      sismoChart.update();
+/* =================== MQTT =================== */
+let msgCount = 0;
+const client = mqtt.connect(brokerUrl, {
+  username: username,
+  password: password,
+  reconnectPeriod: 1000
+});
+
+client.on('connect', () => {
+  document.getElementById('mqttStatus').textContent = 'Online';
+  console.log('Conectado ao HiveMQ Cloud!');
+  client.subscribe(topic, { qos: 0 }, (err) => {
+    if (err) console.error('Erro ao subscrever:', err);
+  });
+});
+
+client.on('reconnect', () => {
+  document.getElementById('mqttStatus').textContent = 'Reconectando...';
+});
+client.on('error', () => {
+  document.getElementById('mqttStatus').textContent = 'Erro na conexão';
+});
+
+client.on('message', (t, message) => {
+  if (t === topic) {
+    const data = JSON.parse(message.toString());
+    const value = parseInt(data.value);
+
+    // Atualiza gráfico
+    chartData.datasets[0].data.push(value);
+    chartData.datasets[0].data.shift();
+    sismoChart.update();
+
+    // Atualiza contador de mensagens
+    msgCount++;
+    document.getElementById('msgCount').textContent = msgCount;
+
+    // Determina faixa de alerta
+    let faixa = '';
+    let color = '';
+    if(value >= 1750 && value <= 2250){
+      faixa = '⚪ Normal';
+      color = 'rgba(255,255,255,1)';
+    } else if((value >= 1500 && value < 1750) || (value > 2250 && value <= 2500)){
+      faixa = '🟡 Sismo Fraco';
+      color = 'rgba(255,235,59,1)';
+    } else {
+      faixa = '🔴 Sismo Forte';
+      color = 'rgba(244,67,54,1)';
     }
-  });
 
-  client.on('error', (err) => console.error('MQTT Error:', err));
-  client.on('reconnect', () => console.log('Reconectando...'));
+    // Atualiza card e cor do gráfico
+    document.getElementById('lastValue').textContent = value + ' ' + faixa;
+    chartData.datasets[0].borderColor = color;
+    chartData.datasets[0].backgroundColor = color.replace('1','0.2');
+
+    // Atualiza marcador do mapa
+    marker.setLatLng([data.lat, data.lon])
+          .bindPopup(`Valor: ${value} - ${faixa}`)
+          .openPopup();
+  }
+});
+
+/* =================== BOTÃO RESET =================== */
+document.getElementById('resetBtn').addEventListener('click', () => {
+  chartData.datasets[0].data = Array(maxPoints).fill(0);
+  sismoChart.update();
+  msgCount = 0;
+  document.getElementById('msgCount').textContent = msgCount;
+  document.getElementById('lastValue').textContent = '0 ⚪ Normal';
+});
 </script>
 
 </body>
