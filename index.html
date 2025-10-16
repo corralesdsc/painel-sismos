@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Detector de Sismos Grupo 8 - ESP32</title>
+<title>Detector de Sismos - ESP32</title>
 
 <!-- MQTT.js -->
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
@@ -88,6 +88,32 @@ button {
 button:hover {
   background-color: var(--azul-medio);
 }
+
+/* Estilo do Card Científico */
+.card-cientifico {
+  background-color: rgba(66, 135, 245, 0.2); /* azul claro translúcido */
+  border: 2px solid rgba(66, 135, 245, 0.5);
+  color: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  margin: 10px;
+  min-width: 300px;
+  text-align: center;
+}
+
+.card-cientifico button {
+  background-color: rgba(66, 135, 245, 0.8);
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  margin: 5px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.card-cientifico button:hover {
+  background-color: rgba(66, 135, 245, 1);
+}
 </style>
 </head>
 <body>
@@ -100,7 +126,7 @@ button:hover {
     <p id="lastValue">0 ⚪ Normal</p>
   </div>
   <div class="card">
-    <h3>Dados Recebidos</h3>
+    <h3>Mensagens Recebidas</h3>
     <p id="msgCount">0</p>
   </div>
   <div class="card">
@@ -109,6 +135,53 @@ button:hover {
   </div>
   <div class="card">
     <button id="resetBtn">Reset Gráfico</button>
+  </div>
+
+  <!-- Novo Card Científico -->
+  <div class="card card-cientifico">
+    <h3>Sobre o Projeto</h3>
+    <div id="cientificoCards">
+      <!-- Card 1: Alertas e Aplicação -->
+      <div class="cientificoCard" style="display:none;">
+        <h4>Alertas e Aplicação</h4>
+     <ul style="list-style:none; padding:0;">
+           <li>Este detector de sismos utiliza</li>
+            <li>um pêndulo e um potenciômetro</li>
+               <li>para medir vibrações.</li> 
+            <li>Pode ser usado como sistema de</li> 
+      <li>alerta para evacuação e tomada de decisão rápida</li>
+               <li>em situações de risco.</li>
+        </ul>
+      </div>
+      <!-- Card 2: Escolha do Pêndulo -->
+      <div class="cientificoCard" style="display:none;">
+        <h4>Por que o Pêndulo?</h4>
+      <ul style="list-style:none; padding:0;">
+           <li>O pêndulo foi escolhido por sua</li>
+              <li>aplicabilidade pedagógica,</li>
+         <li>permitindo demonstrar as leis da física</li> 
+                  <li>de forma didática.</li>
+        <li>Além disso, proporciona medições confiáveis</li>
+     <li>de oscilações para estudo do movimento e alertas.</li>
+        </ul>
+      </div>
+      <!-- Card 3: Integrantes -->
+      <div class="cientificoCard" style="display:none;">
+        <h4>Integrantes</h4>
+        <ul style="list-style:none; padding:0;">
+          <li>David Salgado Corrales - 202508137844</li>
+          <li>Diego Rodrigues Pereira Teles - 200801279065</li>
+          <li>David de Almeida Bernardo - 202504017161</li>
+          <li>Fernando Luiz Farias Fontes - 202204028875</li>
+          <li>Caio Santiago Correia - 202503924881</li>
+          <li>Priscila da Silva Sanfins - 202508481502</li>
+        </ul>
+      </div>
+    </div>
+    <div style="margin-top:10px;">
+      <button id="prevCard">⬅️</button>
+      <button id="nextCard">➡️</button>
+    </div>
   </div>
 </div>
 
@@ -148,10 +221,14 @@ const sismoChart = new Chart(ctx, {
     responsive: true,
     scales: {
       x: { display: false },
-      y: { beginAtZero: true }
+      y: { 
+        min: 0,
+        max: 4100
+      }
     }
   }
 });
+
 
 /* =================== MAPA =================== */
 const map = L.map('map').setView([sensorLat, sensorLon], 10);
@@ -234,12 +311,21 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   document.getElementById('msgCount').textContent = msgCount;
   document.getElementById('lastValue').textContent = '0 ⚪ Normal';
 });
+
+/* =================== NAVIGAÇÃO CARD CIENTÍFICO =================== */
+let currentCard = 0;
+const cards = document.querySelectorAll('#cientificoCards .cientificoCard');
+document.getElementById('prevCard').addEventListener('click', () => {
+  cards[currentCard].style.display = 'none';
+  currentCard = (currentCard - 1 + cards.length) % cards.length;
+  cards[currentCard].style.display = 'block';
+});
+document.getElementById('nextCard').addEventListener('click', () => {
+  cards[currentCard].style.display = 'none';
+  currentCard = (currentCard + 1) % cards.length;
+  cards[currentCard].style.display = 'block';
+});
 </script>
 
 </body>
 </html>
-
-
-
-
-
